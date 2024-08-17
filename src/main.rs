@@ -1,9 +1,6 @@
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
-    commitment_config::CommitmentConfig,
-    signature::Keypair,
-    signer::Signer,
-    system_instruction,
+    commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Keypair, signer::Signer, system_instruction
 };
 use std::{env, fs, path::Path};
 use serde::Deserialize;
@@ -29,44 +26,41 @@ fn main() {
 
 
     let payer = Keypair::from_bytes(&payer_secret_key).unwrap();
-    let new_account = Keypair::new();
+    let base = Keypair::new();
 
     println!("{}" , payer.pubkey().to_string());
 
-    // let request_airdrop = rpc_client.request_airdrop(&payer.pubkey(), LAMPORTS_PER_SOL).unwrap();
+    let seed = "charondev";
+    let program_id = solana_program::system_program::id();
+    let derived_pubkey = Pubkey::create_with_seed(&base.pubkey(), seed, &program_id).unwrap();
 
-    // loop {
-    //     if let Ok(confirmed) = rpc_client.confirm_transaction(&request_airdrop) {
-    //         if confirmed {
-    //             break;
-    //         }
-    //     }
-    // }
 
     let space = 10;
     let rent_exemption_amount = rpc_client.get_minimum_balance_for_rent_exemption(space).unwrap();
-    let create_account = system_instruction::create_account(
+    let create_account_with_seed_ix = system_instruction::create_account_with_seed(
         &payer.pubkey(),
-        &new_account.pubkey(),
+        &derived_pubkey,
+        &base.pubkey(),
+        seed,
         rent_exemption_amount,
         space as u64,
-        &payer.pubkey()
+        &program_id
     );
 
     let recent_blockhash = rpc_client.get_latest_blockhash().unwrap();
-    let create_account_tx = solana_sdk::transaction::Transaction::new_signed_with_payer(
-        &[create_account],
+    let create_account_with_seed_tx  = solana_sdk::transaction::Transaction::new_signed_with_payer(
+        &[create_account_with_seed_ix],
         Some(&payer.pubkey()),
-        &[&payer, &new_account],
+        &[&payer, &base],
         recent_blockhash
     );
 
-    let create_account_tx_signature = rpc_client
-        .send_and_confirm_transaction(&create_account_tx)
+    let create_account_with_seed_tx_signature  = rpc_client
+        .send_and_confirm_transaction(&create_account_with_seed_tx)
         .unwrap();
 
-    println!("Transaction signature: {create_account_tx_signature}");
-    println!("New account {} created successfully", new_account.pubkey());
+    println!("Transaction signature: {create_account_with_seed_tx_signature}");
+    println!("New account {} created successfully", derived_pubkey);
 }
 
 
